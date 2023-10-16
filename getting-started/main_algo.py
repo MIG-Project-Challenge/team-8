@@ -113,7 +113,7 @@ class Algo:
             rolling_stdevs.append(rolling_stdev)
         return np.array(rolling_stdevs)
 
-    def runSMA(self):
+    def runMeanReversion(self):
         # calculate trades based off of SMA momentum strategy
 
         # first calculate the SMAs
@@ -152,7 +152,47 @@ class Algo:
                     self.trades[stock][day+1] = 0
 
         # calculate the final portfolio value (after trades occur)
-        #self.port_values[-1] = self.calcPortfolioValue(len(self.open_prices[0])-1)
+        self.port_values[-1] = self.calcPortfolioValue(len(self.open_prices[0])-1)
+        
+
+    def runSMA(self):
+        # calculate trades based off of SMA momentum strategy
+
+        # first calculate the SMAs
+        fast_smas = []
+        slow_smas = []
+        for stock in range(len(self.open_prices)): 
+            fast_sma = self.calculate_sma(self.open_prices[stock], timeperiod=self.fastSMA)
+            slow_sma = self.calculate_sma(self.open_prices[stock], timeperiod=self.slowSMA)
+            fast_smas.append(fast_sma)
+            slow_smas.append(slow_sma)
+
+        # now calculate trades
+        for day in range(1, len(self.open_prices[0])-1):
+            self.port_values[day] = self.calcPortfolioValue(day)
+
+            # loop through each stock for the given day
+            for stock in range(len(self.open_prices)): 
+                fast_sma = fast_smas[stock]
+                slow_sma = slow_smas[stock]
+
+                # Buy: fast SMA crosses above slow SMA
+                if fast_sma[day] > slow_sma[day] and fast_sma[day-1] <= slow_sma[day-1]:
+                    # we are trading the next day's open price
+                    self.trades[stock][day+1] = 1
+                    self.handleBuy(stock, day+1, 1)
+                
+                # Sell/short: fast SMA crosses below slow SMA
+                elif fast_sma[day] < slow_sma[day] and fast_sma[day-1] >= slow_sma[day-1]:
+                    # we are trading the next day's open price
+                    self.trades[stock][day+1] = -1
+                    self.handleSell(stock, day+1, 1)
+                # else do nothing
+                else:
+                    self.trades[stock][day+1] = 0
+
+        # calculate the final portfolio value (after trades occur)
+        self.port_values[-1] = self.calcPortfolioValue(len(self.open_prices[0])-1)
 
     def saveTrades(self, path):
         # for convention please name the file "trades.npy"
