@@ -124,8 +124,6 @@ class Algo:
             stdevs = self.calculate_rolling_stdevs(self.close_prices[stock], 100)
             rolling_means.append(data)
             rolling_stds.append(stdevs)
-        print(rolling_means)
-        print(rolling_stds)
 
         # now calculate trades
         for day in range(100, len(self.open_prices[0])-1):
@@ -175,9 +173,10 @@ class Algo:
             for stock in range(len(self.open_prices)): 
                 fast_sma = fast_smas[stock]
                 slow_sma = slow_smas[stock]
-
+                if slow_sma[day-1] == None or slow_sma[day] == None:
+                    self.trades[stock][day+1] = 0
                 # Buy: fast SMA crosses above slow SMA
-                if fast_sma[day] > slow_sma[day] and fast_sma[day-1] <= slow_sma[day-1]:
+                elif fast_sma[day] > slow_sma[day] and fast_sma[day-1] <= slow_sma[day-1]:
                     # we are trading the next day's open price
                     self.trades[stock][day+1] = 1
                     self.handleBuy(stock, day+1, 1)
@@ -213,8 +212,6 @@ class Algo:
         
         # case 2: we have short a position and are buying
         elif self.positions[stock] < 0:
-            if day < 50:
-                print(self.positions[stock])
             buy_amount = min(numShares - abs(self.positions[stock]), 0)
             short_close_amount = min(abs(self.positions[stock]), numShares)
             self.positions[stock] += short_close_amount
@@ -318,9 +315,8 @@ if __name__ == "__main__":
     # we can run the evaluation for ourselves here to see how our trades did
     # you very likely will want to make your own system to keep track of your trades, cash, portfolio value etc, inside the 
     # runSMA function (or whatever equivalent function you have)
-    #port_values, sharpe_ratio = eval_actions(algo.trades,algo.open_prices, cash=25000,verbose=True)
+    port_values, sharpe_ratio = eval_actions(algo.trades,algo.open_prices, cash=25000,verbose=True)
 
-    #print(sharpe_ratio)
-    #print(algo.port_values[-1])
-    print(algo.positions)
+    print(sharpe_ratio)
+    print(algo.port_values[-1])
     algo.saveTrades("trades.npy")
