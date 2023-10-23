@@ -195,35 +195,35 @@ class Algo:
 
     def calculate_rolling_rate_of_return(self, data):
         rolling_returns = []
-        for i in range(20, len(data)-1):
+        for i in range(10, len(data)-1):
             # Calculate the percentage change
-            percentage_change = ((data[i] - data[i-20]) / data[i-20]) * 100
+            percentage_change = ((data[i] - data[i-10]) / data[i-10]) * 100
             rolling_returns.append(percentage_change)
         return np.array(rolling_returns)
 
     def runMomentum2(self):
-        # Calculate the rolling 30-day rate of return for each stock
+        # Calculate the rolling 10-day rate of return for each stock
         rolling_percent_changes = []
         for stock in range(len(self.open_prices)): 
             returns = self.calculate_rolling_rate_of_return(self.close_prices[stock])
             rolling_percent_changes.append(returns)
 
-        for day in range(20, len(self.open_prices[0]) - 1):
+        for day in range(10, len(self.open_prices[0]) - 1):
             for stock in range(len(self.open_prices)):
                 print(day, stock)
 
-                # Get the rolling 30-day rate of return for the current stock
+                # Get the rolling 10-day rate of return for the current stock
                 rolling_return = rolling_percent_changes[stock]
                 print(rolling_return)
-                if pd.isna(rolling_return[day - 20]) or pd.isna(rolling_return[day-21]):
+                if pd.isna(rolling_return[day - 10]) or pd.isna(rolling_return[day-11]):
                     self.trades[stock][day + 1] = 0
-                # Buy: Rolling 30-day rate of return crosses from negative to positive
-                elif rolling_return[day - 21] >= 0 and rolling_return[day-20] < 0:
+                # Buy: Rolling 10-day rate of return crosses from negative to positive
+                elif rolling_return[day - 11] >= 0 and rolling_return[day-10] < 0:
                     # Buy the next day's open price
                     self.trades[stock][day + 1] = 1
                     self.handleBuy(stock, day + 1, 1)
-                # Sell/short: Rolling 30-day rate of return crosses from positive to negative
-                elif rolling_return[day - 21] < 0 and rolling_return[day-20] >= 0:
+                # Sell/short: Rolling 10-day rate of return crosses from positive to negative
+                elif rolling_return[day - 11] < 0 and rolling_return[day-10] >= 0:
                     # Sell/short the next day's open price
                     self.trades[stock][day + 1] = -1
                     self.handleSell(stock, day + 1, 1)
@@ -354,7 +354,7 @@ if __name__ == "__main__":
 
     algo = Algo(prices_path)
 
-    algo.runSMA()
+    algo.runMomentum2()
 
     # we can run the evaluation for ourselves here to see how our trades did
     # you very likely will want to make your own system to keep track of your trades, cash, portfolio value etc, inside the 
