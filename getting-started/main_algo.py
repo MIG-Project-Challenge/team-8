@@ -215,18 +215,20 @@ class Algo:
                 # Get the rolling 10-day rate of return for the current stock
                 rolling_return = rolling_percent_changes[stock]
                 print(rolling_return)
-                if pd.isna(rolling_return[day - 10]) or pd.isna(rolling_return[day-11]):
+                if stock in [7,31,42,26,38]:
+                    self.trades[stock][day + 1] = 0
+                elif pd.isna(rolling_return[day - 10]) or pd.isna(rolling_return[day-11]):
                     self.trades[stock][day + 1] = 0
                 # Buy: Rolling 10-day rate of return crosses from negative to positive
                 elif rolling_return[day - 11] >= 0 and rolling_return[day-10] < 0:
                     # Buy the next day's open price
-                    self.trades[stock][day + 1] = 1
-                    self.handleBuy(stock, day + 1, 1)
+                    self.trades[stock][day + 1] = 20
+                    self.handleBuy(stock, day + 1, 20)
                 # Sell/short: Rolling 10-day rate of return crosses from positive to negative
                 elif rolling_return[day - 11] < 0 and rolling_return[day-10] >= 0:
                     # Sell/short the next day's open price
-                    self.trades[stock][day + 1] = -1
-                    self.handleSell(stock, day + 1, 1)
+                    self.trades[stock][day + 1] = -20
+                    self.handleSell(stock, day + 1, 20)
                 # Else, do nothing
                 else:
                     self.trades[stock][day + 1] = 0
@@ -355,7 +357,13 @@ if __name__ == "__main__":
     algo = Algo(prices_path)
 
     algo.runMomentum2()
-
+    unique, counts = np.unique(algo.trades[0], return_counts=True)
+    counter = 0
+    for value in algo.positions:
+        if value != 0.0:
+            print(counter)
+        counter += 1
+    print(dict(zip(unique, counts)))
     # we can run the evaluation for ourselves here to see how our trades did
     # you very likely will want to make your own system to keep track of your trades, cash, portfolio value etc, inside the 
     # runSMA function (or whatever equivalent function you have)
