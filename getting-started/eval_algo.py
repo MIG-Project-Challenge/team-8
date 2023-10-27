@@ -131,11 +131,6 @@ def eval_actions(actions, prices, cash=10, verbose=True):
         print("final portfolio value:", port_values[-1])
         print("cash:", cash)
         print("positions:", positions)
-        counter = 0
-        for value in positions:
-            if value != 0:
-                print(counter)
-            counter += 1 
         print("short position info:", short_positions)
         print("short value:", calcShortValue(len(actions[0]) - 1))
 
