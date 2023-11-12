@@ -11,6 +11,7 @@ import pandas as pd
 from pathlib import Path
 import argparse
 import numpy as np
+import talib as ta # see https://github.com/TA-Lib/ta-lib-python
 
 
 # Read the data from the csv file
@@ -45,7 +46,6 @@ class Algo:
     def __init__(self, data_path, cash=25000, slowSMA=40, fastSMA=5):
         self.df = readData(data_path)
         self.open_prices = pricesToNumpyArray(self.df, col="Open")
-        self.close_prices = pricesToNumpyArray(self.df, col="Close")
         self.trades = np.zeros(self.open_prices.shape)
 
         # Use the below to hold your portfolio state
@@ -59,99 +59,6 @@ class Algo:
         # Algo specific
         self.slowSMA = slowSMA
         self.fastSMA = fastSMA
-        self.slowWeights = [i for i in range(1, slowSMA+1)] 
-        self.fastWeights = [1 for i in range(1, fastSMA+1)]
-
-    def calculate_sma(self, data, timeperiod):
-        sma_values = []
-        for i in range(len(data)):
-            if i < timeperiod:
-                sma_values.append(None)  # Not enough data for SMA
-            else:
-                sma = sum(data[i - timeperiod:i]) / timeperiod
-                sma_values.append(sma)
-        return sma_values
-    
-    def calculate_wma(self, data, timeperiod, weights=None):
-        if weights is None:
-            # If weights are not provided, use equal weights
-            weights = [1] * timeperiod
-
-        wma_values = []
-        for i in range(len(data)):
-            if i < timeperiod:
-                wma_values.append(None)  # Not enough data for WMA
-            else:
-                wma = sum(data[i - timeperiod:i][j] * weights[j] for j in range(timeperiod)) / sum(weights)
-                wma_values.append(wma)
-        return wma_values
-
-    def calculate_ema(self, data, timeperiod):
-        if len(data) < timeperiod:
-            return None  # Not enough data for EMA
-
-        smoothing = 2 / (timeperiod + 1)
-        ema_values = [data[0]]
-
-        for i in range(1, len(data)):
-            ema = (data[i] - ema_values[i - 1]) * smoothing + ema_values[i - 1]
-            ema_values.append(ema)
-
-        return ema_values
-    
-    def calculate_rolling_means(self, data, window_size):
-        rolling_means = []
-        for i in range(len(data) - window_size + 1):
-            rolling_mean = np.mean(data[i:i+window_size])
-            rolling_means.append(rolling_mean)
-        return np.array(rolling_means)
-    
-    def calculate_rolling_stdevs(self, data, window_size):
-        rolling_stdevs = []
-        for i in range(len(data) - window_size + 1):
-            rolling_stdev = np.std(data[i:i+window_size], ddof=0)
-            rolling_stdevs.append(rolling_stdev)
-        return np.array(rolling_stdevs)
-
-    def runMeanReversion(self):
-        # calculate trades based off of SMA momentum strategy
-
-        # first calculate the SMAs
-        rolling_means = []
-        rolling_stds = []
-        for stock in range(len(self.open_prices)): 
-            data = self.calculate_rolling_means(self.close_prices[stock], 100)
-            stdevs = self.calculate_rolling_stdevs(self.close_prices[stock], 100)
-            rolling_means.append(data)
-            rolling_stds.append(stdevs)
-
-        # now calculate trades
-        for day in range(100, len(self.open_prices[0])-1):
-            self.port_values[day] = self.calcPortfolioValue(day)
-
-            # loop through each stock for the given day
-            for stock in range(len(self.open_prices)): 
-                means = rolling_means[stock]
-                stdevs = rolling_stds[stock]
-
-                # Buy: price below the mean - threshold
-                if  self.close_prices[stock][day] < rolling_means[stock][day-100] - rolling_stds[stock][day-100]: 
-                    # we are trading the next day's open price
-                    self.trades[stock][day+1] = 1
-                    self.handleBuy(stock, day+1, 1)
-                
-                # # Sell/short: price is above the mean + threshold
-                elif self.close_prices[stock][day] > rolling_means[stock][day-100] + rolling_stds[stock][day-100]:
-                    # we are trading the next day's open price
-                    self.trades[stock][day+1] = -1
-                    self.handleSell(stock, day+1, -1)
-                # # else do nothing
-                else:
-                    self.trades[stock][day+1] = 0
-
-        # calculate the final portfolio value (after trades occur)
-        self.port_values[-1] = self.calcPortfolioValue(len(self.open_prices[0])-1)
-        
 
     def runSMA(self):
         # calculate trades based off of SMA momentum strategy
@@ -160,8 +67,8 @@ class Algo:
         fast_smas = []
         slow_smas = []
         for stock in range(len(self.open_prices)): 
-            fast_sma = self.calculate_sma(self.open_prices[stock], timeperiod=self.fastSMA)
-            slow_sma = self.calculate_sma(self.open_prices[stock], timeperiod=self.slowSMA)
+            fast_sma = ta.SMA(self.open_prices[stock], timeperiod=self.fastSMA)
+            slow_sma = ta.SMA(self.open_prices[stock], timeperiod=self.slowSMA)
             fast_smas.append(fast_sma)
             slow_smas.append(slow_sma)
 
@@ -173,10 +80,9 @@ class Algo:
             for stock in range(len(self.open_prices)): 
                 fast_sma = fast_smas[stock]
                 slow_sma = slow_smas[stock]
-                if slow_sma[day-1] == None or slow_sma[day] == None:
-                    self.trades[stock][day+1] = 0
+
                 # Buy: fast SMA crosses above slow SMA
-                elif fast_sma[day] > slow_sma[day] and fast_sma[day-1] <= slow_sma[day-1]:
+                if fast_sma[day] > slow_sma[day] and fast_sma[day-1] <= slow_sma[day-1]:
                     # we are trading the next day's open price
                     self.trades[stock][day+1] = 1
                     self.handleBuy(stock, day+1, 1)
@@ -193,50 +99,6 @@ class Algo:
         # calculate the final portfolio value (after trades occur)
         self.port_values[-1] = self.calcPortfolioValue(len(self.open_prices[0])-1)
 
-    def calculate_rolling_rate_of_return(self, data):
-        rolling_returns = []
-        for i in range(20, len(data)-1):
-            # Calculate the percentage change
-            percentage_change = ((data[i] - data[i-20]) / data[i-20]) * 100
-            rolling_returns.append(percentage_change)
-        return np.array(rolling_returns)
-
-    def runMomentum2(self):
-        # Calculate the rolling 30-day rate of return for each stock
-        rolling_percent_changes = []
-        for stock in range(len(self.open_prices)): 
-            returns = self.calculate_rolling_rate_of_return(self.close_prices[stock])
-            rolling_percent_changes.append(returns)
-
-        for day in range(20, len(self.open_prices[0]) - 1):
-            for stock in range(len(self.open_prices)):
-                print(day, stock)
-
-                # Get the rolling 30-day rate of return for the current stock
-                rolling_return = rolling_percent_changes[stock]
-                print(rolling_return)
-                if pd.isna(rolling_return[day - 20]) or pd.isna(rolling_return[day-21]):
-                    self.trades[stock][day + 1] = 0
-                # Buy: Rolling 30-day rate of return crosses from negative to positive
-                elif rolling_return[day - 21] >= 0 and rolling_return[day-20] < 0:
-                    # Buy the next day's open price
-                    self.trades[stock][day + 1] = 1
-                    self.handleBuy(stock, day + 1, 1)
-                # Sell/short: Rolling 30-day rate of return crosses from positive to negative
-                elif rolling_return[day - 21] < 0 and rolling_return[day-20] >= 0:
-                    # Sell/short the next day's open price
-                    self.trades[stock][day + 1] = -1
-                    self.handleSell(stock, day + 1, 1)
-                # Else, do nothing
-                else:
-                    self.trades[stock][day + 1] = 0
-
-        print(len(self.open_prices))
-        # Calculate the final portfolio value (after trades occur)
-        self.port_values[-1] = self.calcPortfolioValue(len(self.open_prices[0]))
-
-
-
     def saveTrades(self, path):
         # for convention please name the file "trades.npy"
         np.save(path, self.trades)
@@ -244,45 +106,41 @@ class Algo:
     def handleBuy(self, stock, day, numShares):
         # case 1: we have a positive position and are buying
         if self.positions[stock] >= 0:
-            self.cash -= self.open_prices[stock][day] * numShares
+                self.cash -= self.open_prices[stock][day] * numShares
 
-            if not self.cashValid():
-                # TODO: may want to handle this differently
-                print("INVALID CASH AMOUNT, COULD NOT AFFORD TRANSACTION")
-                self.cash += self.open_prices[stock][day] * numShares
-                return
-            self.positions[stock] += numShares
+                if not self.cashValid():
+                    # TODO: may want to handle this differently
+                    print("INVALID CASH AMOUNT, COULD NOT AFFORD TRANSACTION")
 
-        
+                self.positions[stock] += numShares
+
         # case 2: we have short a position and are buying
         elif self.positions[stock] < 0:
             buy_amount = min(numShares - abs(self.positions[stock]), 0)
             short_close_amount = min(abs(self.positions[stock]), numShares)
-            self.positions[stock] += short_close_amount
 
             while short_close_amount > 0:
                 # the amount of positions to close in the current short order
                 positions_to_close = min(
                     self.short_positions[stock][0][1], short_close_amount
                 )
-
                 short_close_amount -= positions_to_close
-                
 
                 # the short value is = (short price - curr price)*amount of shares shorted
                 self.cash += (
                     self.short_positions[stock][0][0] - self.open_prices[stock][day]
                 ) * positions_to_close
-                
+
                 if positions_to_close == self.short_positions[stock][0][1]:
                     self.short_positions[stock].pop(0)
 
                 else:
                     # subtract the amount of closed shares from the given price
-                    self.short_positions[stock][0][1] -= positions_to_close
+                    self.short_positions[0][1] -= positions_to_close
 
             if buy_amount > 0:
                 self.cash -= self.open_prices[stock][day] * buy_amount
+                self.positions[stock] += buy_amount
 
     def handleSell(self, stock, day, numShares):
         # this handles selling and shorting
@@ -363,4 +221,5 @@ if __name__ == "__main__":
 
     print(sharpe_ratio)
     print(algo.port_values[-1])
+
     algo.saveTrades("trades.npy")
